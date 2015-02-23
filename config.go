@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	Variables map[string]string
+	Enabled   []string
 	Disabled  []string
 }
 

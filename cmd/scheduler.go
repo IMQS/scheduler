@@ -62,20 +62,20 @@ func setDefaultVariables() {
 }
 
 func addCommands() {
-	add := func(name string, interval_seconds int, exec string) {
+	add := func(enabled bool, name string, interval_seconds int, exec string) {
 		commands = append(commands, scheduler.Command{
 			Name:     name,
 			Interval: time.Second * time.Duration(interval_seconds),
 			Exec:     exec,
-			Enabled:  true,
+			Enabled:  enabled,
 		})
 	}
 
-	add("Locator", 15, "c:\\imqsbin\\bin\\imqstool locator imqs !LOCATOR_SRC c:\\imqsvar\\staging !JOB_SERVICE_URL !LEGACY_LOCK_DIR")
-	add("ImqsTool Importer", 15, "c:\\imqsbin\\bin\\imqstool importer !LEGACY_LOCK_DIR !JOB_SERVICE_URL")
-	add("Docs Importer", 15, "ruby c:/imqsbin/jsw/ImqsDocs/importer/importer.rb")
-	add("ImqsConf Update", 3*60, "c:/imqsbin/cronjobs/update_runner.bat conf")
-	add("ImqsBin Update", 3*60, "c:/imqsbin/cronjobs/update_runner.bat imqsbin")
+	add(true, "Locator", 15, "c:\\imqsbin\\bin\\imqstool locator imqs !LOCATOR_SRC c:\\imqsvar\\staging !JOB_SERVICE_URL !LEGACY_LOCK_DIR")
+	add(true, "ImqsTool Importer", 15, "c:\\imqsbin\\bin\\imqstool importer !LEGACY_LOCK_DIR !JOB_SERVICE_URL")
+	add(true, "Docs Importer", 15, "ruby c:/imqsbin/jsw/ImqsDocs/importer/importer.rb")
+	add(true, "ImqsConf Update", 3*60, "c:/imqsbin/cronjobs/update_runner.bat conf")
+	add(true, "ImqsBin Update", 3*60, "c:/imqsbin/cronjobs/update_runner.bat imqsbin")
 }
 
 func cmdEnabledList() string {
@@ -95,6 +95,13 @@ func cmdEnabledList() string {
 func loadConfig() {
 	if err := config.LoadFile("c:/imqsbin/conf/scheduled-tasks.json"); err != nil {
 		log.Printf("Error loading config file 'scheduled-tasks.json': %v", err)
+	}
+	for _, name := range config.Enabled {
+		for i, _ := range commands {
+			if commands[i].Name == name {
+				commands[i].Enabled = true
+			}
+		}
 	}
 	for _, name := range config.Disabled {
 		for i, _ := range commands {
