@@ -32,6 +32,10 @@ import (
 var commands []scheduler.Command
 var config scheduler.Config
 
+const (
+	taskConfUpdate = "ImqsConf Update"
+)
+
 func main() {
 
 	log.SetOutput(&lumberjack.Logger{
@@ -49,7 +53,9 @@ func main() {
 	log.Printf("Variables: %v", config.Variables)
 	log.Printf("Enabled: %v", cmdEnabledList())
 
-	run()
+	if !scheduler.RunAsService(run) {
+		run()
+	}
 
 	log.Printf("Exiting")
 }
