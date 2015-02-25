@@ -12,6 +12,7 @@ type Command struct {
 	Name     string
 	Interval time.Duration
 	Exec     string
+	Params   []string
 	Enabled  bool
 	lastRun  time.Time
 }
@@ -41,9 +42,10 @@ func (c *Command) MustRun() bool {
 
 func (c *Command) Run(variables map[string]string) {
 	c.lastRun = time.Now()
-	exe, params := parse_exec(substitute_variables(c.Exec, variables))
-	log.Printf("Running %v (%v) (%v)", c.Name, exe, params)
-	cmd := exec.Command(exe, params)
+	log.Printf("Before %v ", c.Params)
+	params := strings.Fields(substitute_variables(strings.Join(c.Params, " "), variables))
+	log.Printf("Running %v (%v)", c.Exec, params)
+	cmd := exec.Command(c.Exec, params...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -51,6 +53,8 @@ func (c *Command) Run(variables map[string]string) {
 	err := cmd.Run()
 	if err == nil {
 		log.Printf("Success %v", c.Name)
+		log.Print("stdout: " + stdout.String())
+		log.Print("stderr: " + stderr.String())
 	} else {
 		log.Printf("Failed %v: %v", c.Name, err)
 		log.Print("stdout: " + stdout.String())

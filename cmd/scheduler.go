@@ -68,20 +68,21 @@ func setDefaultVariables() {
 }
 
 func addCommands() {
-	add := func(enabled bool, name string, interval_seconds int, exec string) {
+	add := func(enabled bool, name string, interval_seconds int, exec string, params ...string) {
 		commands = append(commands, scheduler.Command{
 			Name:     name,
 			Interval: time.Second * time.Duration(interval_seconds),
 			Exec:     exec,
+			Params:   params,
 			Enabled:  enabled,
 		})
 	}
 
-	add(true, "Locator", 15, "c:\\imqsbin\\bin\\imqstool locator imqs !LOCATOR_SRC c:\\imqsvar\\staging !JOB_SERVICE_URL !LEGACY_LOCK_DIR")
-	add(true, "ImqsTool Importer", 15, "c:\\imqsbin\\bin\\imqstool importer !LEGACY_LOCK_DIR !JOB_SERVICE_URL")
+	add(true, "Locator", 15, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
+	add(true, "ImqsTool Importer", 15, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
 	add(true, "Docs Importer", 15, "ruby c:/imqsbin/jsw/ImqsDocs/importer/importer.rb")
-	add(true, "ImqsConf Update", 3*60, "c:/imqsbin/cronjobs/update_runner.bat conf")
-	add(true, "ImqsBin Update", 3*60, "c:/imqsbin/cronjobs/update_runner.bat imqsbin")
+	add(true, "ImqsConf Update", 3*60, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
+	add(true, "ImqsBin Update", 3*60, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
 }
 
 func cmdEnabledList() string {
