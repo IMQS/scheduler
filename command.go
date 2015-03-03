@@ -42,7 +42,6 @@ func (c *Command) MustRun() bool {
 
 func (c *Command) Run(variables map[string]string) {
 	c.lastRun = time.Now()
-	log.Printf("Before %v ", c.Params)
 	params := strings.Fields(substitute_variables(strings.Join(c.Params, " "), variables))
 	log.Printf("Running %v (%v)", c.Exec, params)
 	cmd := exec.Command(c.Exec, params...)
@@ -53,8 +52,6 @@ func (c *Command) Run(variables map[string]string) {
 	err := cmd.Run()
 	if err == nil {
 		log.Printf("Success %v", c.Name)
-		log.Print("stdout: " + stdout.String())
-		log.Print("stderr: " + stderr.String())
 	} else {
 		log.Printf("Failed %v: %v", c.Name, err)
 		log.Print("stdout: " + stdout.String())
