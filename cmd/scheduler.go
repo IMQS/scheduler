@@ -62,7 +62,7 @@ func main() {
 
 func setDefaultVariables() {
 	config.Variables = make(map[string]string)
-	config.Variables["LOCATOR_SRC"] = "c:\\temp\\ImportClients"
+	config.Variables["LOCATOR_SRC"] = "c:\\imqsvar\\Imports"
 	config.Variables["LEGACY_LOCK_DIR"] = "c:\\imqsvar\\locks" // No longer needed, since we serialize all scheduled tasks. Should remove from imqstool.
 	config.Variables["JOB_SERVICE_URL"] = "http://localhost"
 }
