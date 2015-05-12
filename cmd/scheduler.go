@@ -83,6 +83,7 @@ func addCommands() {
 	add(true, "Docs Importer", 15, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
 	add(true, "ImqsConf Update", 3*60, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
 	add(true, "ImqsBin Update", 3*60, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
+	add(true, "Auth Log Scraper", 60*60*24, "ruby", "c:\\imqsbin\\cronjobs\\logscraper.rb")
 }
 
 func cmdEnabledList() string {
