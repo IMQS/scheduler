@@ -69,8 +69,8 @@ func (c *Command) Run(variables map[string]string) {
 				log.Printf("Failed to kill process.")
 			}
 		case <-donec:
-			log.Printf("Success %v", c.Name)
+			// Success logs are just spammy.
+			//log.Printf("Success %v", c.Name)
 		}
 	}
-
 }

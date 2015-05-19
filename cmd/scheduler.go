@@ -79,12 +79,14 @@ func addCommands() {
 		})
 	}
 
-	add(true, "Locator", 15, 2*60*60, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
-	add(true, "ImqsTool Importer", 15, 6*60*60, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
-	add(true, "Docs Importer", 15, 2*60*60, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
-	add(true, "ImqsConf Update", 3*60, 2*60*60, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
-	add(true, "ImqsBin Update", 3*60, 2*60*60, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
+	minute := 60
+	hour := 3600
 
+	add(true, "Locator", 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
+	add(true, "ImqsTool Importer", 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
+	add(true, "Docs Importer", 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
+	add(true, "ImqsConf Update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
+	add(true, "ImqsBin Update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
 }
 
 func cmdEnabledList() string {
@@ -123,11 +125,12 @@ func loadConfig() {
 
 func run() {
 	for {
-		for _, cmd := range commands {
-			if cmd.MustRun() {
-				cmd.Run(config.Variables)
+		for i := range commands {
+			if commands[i].MustRun() {
+				commands[i].Run(config.Variables)
 			}
 		}
 		time.Sleep(5 * time.Second)
+		loadConfig()
 	}
 }
