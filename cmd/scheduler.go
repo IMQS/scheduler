@@ -23,9 +23,12 @@ die, because then the server is bricked, and humans need to go sort out all bric
 package main
 
 import (
+	"bytes"
 	"github.com/IMQS/scheduler"
 	"github.com/natefinch/lumberjack"
 	"log"
+	"os/exec"
+	"strconv"
 	"time"
 )
 
@@ -60,11 +63,32 @@ func main() {
 	log.Printf("Exiting")
 }
 
+func getImqsHttpPort() int {
+	defaultPort := 80
+	cmd := exec.Command("c:\\imqsbin\\bin\\imqsrouter.exe", "-show-http-port", "-mainconfig", "c:\\imqsbin\\static-conf\\router-config.json", "-auxconfig", "c:\\imqsbin\\conf\\router-config.json")
+	outBuf := &bytes.Buffer{}
+	cmd.Stdout = outBuf
+	if err := cmd.Run(); err != nil {
+		log.Printf("Error running router: %v", err)
+		return defaultPort
+	}
+	if port, err := strconv.Atoi(string(outBuf.Bytes())); err != nil || port <= 0 {
+		log.Printf("Error reading http port from router: %v", err)
+		return defaultPort
+	} else {
+		return port
+	}
+}
+
 func setDefaultVariables() {
+	imqsHttpPort := getImqsHttpPort()
 	config.Variables = make(map[string]string)
 	config.Variables["LOCATOR_SRC"] = "c:\\imqsvar\\imports"
 	config.Variables["LEGACY_LOCK_DIR"] = "c:\\imqsvar\\locks" // No longer needed, since we serialize all scheduled tasks. Should remove from imqstool.
 	config.Variables["JOB_SERVICE_URL"] = "http://localhost"
+	if imqsHttpPort != 80 {
+		config.Variables["JOB_SERVICE_URL"] = config.Variables["JOB_SERVICE_URL"] + ":" + strconv.Itoa(imqsHttpPort)
+	}
 }
 
 func addCommands() {
@@ -85,7 +109,7 @@ func addCommands() {
 	add(true, "Locator", 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
 	add(true, "ImqsTool Importer", 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
 	add(true, "Docs Importer", 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
-	add(true, "ImqsConf Update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
+	add(true, "ImqsConf Update", 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
 	add(true, "ImqsBin Update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
 }
 
