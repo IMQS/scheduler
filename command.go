@@ -11,6 +11,7 @@ import (
 type Command struct {
 	Name     string
 	Interval time.Duration
+	Timeout  time.Duration
 	Exec     string
 	Params   []string
 	Enabled  bool
@@ -49,12 +50,27 @@ func (c *Command) Run(variables map[string]string) {
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err == nil {
-		log.Printf("Success %v", c.Name)
-	} else {
+	err := cmd.Start()
+	if err != nil {
 		log.Printf("Failed %v: %v", c.Name, err)
 		log.Print("stdout: " + stdout.String())
 		log.Print("stderr: " + stderr.String())
+
+	} else {
+		// wait or timeout
+		donec := make(chan error, 1)
+		go func() {
+			donec <- cmd.Wait()
+		}()
+		select {
+		case <-time.After(c.Timeout):
+			log.Printf("%v timed out after %v seconds.", c.Name, c.Timeout)
+			if !killProcessTree(cmd.Process.Pid) {
+				log.Printf("Failed to kill process.")
+			}
+		case <-donec:
+			// Success logs are just spammy.
+			//log.Printf("Success %v", c.Name)
+		}
 	}
 }
