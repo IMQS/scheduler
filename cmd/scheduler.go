@@ -24,16 +24,16 @@ package main
 
 import (
 	"bytes"
+	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
-	"github.com/natefinch/lumberjack"
-	"log"
 	"os/exec"
 	"strconv"
 	"time"
 )
 
-var commands []scheduler.Command
+var commands []*scheduler.Command
 var config scheduler.Config
+var logger *log.Logger
 
 const (
 	taskConfUpdate = "ImqsConf Update"
@@ -41,26 +41,21 @@ const (
 
 func main() {
 
-	log.SetOutput(&lumberjack.Logger{
-		Filename:   "c:/imqsvar/logs/scheduler.log",
-		MaxSize:    20, // megabytes
-		MaxBackups: 3,
-		MaxAge:     30, //days
-	})
+	logger = log.New("c:/imqsvar/logs/scheduler.log")
 
 	setDefaultVariables()
 	addCommands()
 	loadConfig()
 
-	log.Printf("Scheduler starting")
-	log.Printf("Variables: %v", config.Variables)
-	log.Printf("Enabled: %v", cmdEnabledList())
+	logger.Infof("Scheduler starting")
+	logger.Infof("Variables: %v", config.Variables)
+	logger.Infof("Enabled: %v", cmdEnabledList())
 
 	if !scheduler.RunAsService(run) {
 		run()
 	}
 
-	log.Printf("Exiting")
+	logger.Infof("Exiting")
 }
 
 func getImqsHttpPort() int {
@@ -69,11 +64,11 @@ func getImqsHttpPort() int {
 	outBuf := &bytes.Buffer{}
 	cmd.Stdout = outBuf
 	if err := cmd.Run(); err != nil {
-		log.Printf("Error running router: %v", err)
+		logger.Errorf("Error running router: %v", err)
 		return defaultPort
 	}
 	if port, err := strconv.Atoi(string(outBuf.Bytes())); err != nil || port <= 0 {
-		log.Printf("Error reading http port from router: %v", err)
+		logger.Errorf("Error reading http port from router: %v", err)
 		return defaultPort
 	} else {
 		return port
@@ -92,26 +87,29 @@ func setDefaultVariables() {
 }
 
 func addCommands() {
-	add := func(enabled bool, name string, interval_seconds int, timeout_seconds int, exec string, params ...string) {
-		commands = append(commands, scheduler.Command{
+	add := func(enabled bool, name string, interval time.Duration, timeout time.Duration, exec string, params ...string) *scheduler.Command {
+		commands = append(commands, &scheduler.Command{
 			Name:     name,
-			Interval: time.Second * time.Duration(interval_seconds),
-			Timeout:  time.Second * time.Duration(timeout_seconds),
+			Interval: interval,
+			Timeout:  timeout,
 			Exec:     exec,
 			Params:   params,
 			Enabled:  enabled,
 		})
+		return commands[len(commands)-1]
 	}
 
-	minute := 60
-	hour := 3600
+	minute := time.Minute
+	hour := time.Hour
+	daily := 24 * time.Hour
 
 	add(true, "Locator", 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
 	add(true, "ImqsTool Importer", 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
-	add(true, "Auth Log Scraper", 60*60*24, 24*hour, "ruby", "c:\\imqsbin\\cronjobs\\logscrape.rb")
+	add(true, "Auth Log Scraper", 24*hour, 24*hour, "ruby", "c:\\imqsbin\\cronjobs\\logscrape.rb")
 	add(true, "Docs Importer", 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
 	add(true, "ImqsConf Update", 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
 	add(true, "ImqsBin Update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
+	add(true, "Backup", daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb").SetStartTime(23, 0)
 }
 
 func cmdEnabledList() string {
@@ -130,19 +128,19 @@ func cmdEnabledList() string {
 
 func loadConfig() {
 	if err := config.LoadFile("c:/imqsbin/conf/scheduled-tasks.json"); err != nil {
-		log.Printf("Error loading config file 'scheduled-tasks.json': %v", err)
+		logger.Errorf("Error loading config file 'scheduled-tasks.json': %v", err)
 	}
 	for _, name := range config.Enabled {
-		for i, _ := range commands {
-			if commands[i].Name == name {
-				commands[i].Enabled = true
+		for _, c := range commands {
+			if c.Name == name {
+				c.Enabled = true
 			}
 		}
 	}
 	for _, name := range config.Disabled {
-		for i, _ := range commands {
-			if commands[i].Name == name {
-				commands[i].Enabled = false
+		for _, c := range commands {
+			if c.Name == name {
+				c.Enabled = false
 			}
 		}
 	}
@@ -150,10 +148,9 @@ func loadConfig() {
 
 func run() {
 	for {
-		for i := range commands {
-			if commands[i].MustRun() {
-				commands[i].Run(config.Variables)
-			}
+		next := scheduler.NextRunnable(commands, time.Now())
+		if next != nil {
+			next.Run(logger, config.Variables)
 		}
 		time.Sleep(5 * time.Second)
 		loadConfig()
