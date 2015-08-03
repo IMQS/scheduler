@@ -40,7 +40,6 @@ const (
 )
 
 func main() {
-
 	logger = log.New("c:/imqsvar/logs/scheduler.log")
 
 	setDefaultVariables()
@@ -87,9 +86,10 @@ func setDefaultVariables() {
 }
 
 func addCommands() {
-	add := func(enabled bool, name string, interval time.Duration, timeout time.Duration, exec string, params ...string) *scheduler.Command {
+	add := func(enabled bool, name, pool string, interval time.Duration, timeout time.Duration, exec string, params ...string) *scheduler.Command {
 		commands = append(commands, &scheduler.Command{
 			Name:     name,
+			Pool:     pool,
 			Interval: interval,
 			Timeout:  timeout,
 			Exec:     exec,
@@ -103,13 +103,23 @@ func addCommands() {
 	hour := time.Hour
 	daily := 24 * time.Hour
 
-	add(true, "Locator", 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
-	add(true, "ImqsTool Importer", 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
-	add(true, "Auth Log Scraper", 24*hour, 24*hour, "ruby", "c:\\imqsbin\\cronjobs\\logscrape.rb")
-	add(true, "Docs Importer", 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
-	add(true, "ImqsConf Update", 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
-	add(true, "ImqsBin Update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
-	add(true, "Backup", daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb").SetStartTime(23, 0)
+	// The second parameter here is the job pool. For any pool, at most one job can be running. For example, we have two jobs
+	// in the "update" pool, so only one of them can be running at a time.
+
+	// Imports
+	add(true, "Locator", "import", 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
+	add(true, "ImqsTool Importer", "import", 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
+	add(true, "Docs Importer", "import", 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
+
+	// Scrapers
+	add(true, "Auth Log Scraper", "logscrape", 24*hour, 24*hour, "ruby", "c:\\imqsbin\\cronjobs\\logscrape.rb")
+
+	// Updaters
+	add(true, "ImqsConf Update", "update", 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
+	add(true, "ImqsBin Update", "update", 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
+
+	// Backups
+	add(true, "Backup", "backup", daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb").SetStartTime(23, 0)
 }
 
 func cmdEnabledList() string {

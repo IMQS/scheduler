@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -24,15 +25,20 @@ import (
 // so it's very unlikely that we miss our 2 hour window.
 const dailyCommandWindow = 2 * time.Hour
 
+/* A scheduled task
+Every scheduled task belongs to a pool. At most one job from a pool may run at any one time.
+*/
 type Command struct {
-	Name      string
-	Enabled   bool
-	StartTime time.Time // Year,Month,Day is ignored. Only hour,minute,second (since midnight) is important
-	Interval  time.Duration
-	Timeout   time.Duration
-	Exec      string
-	Params    []string
-	lastRun   time.Time
+	Name            string
+	Pool            string
+	Enabled         bool
+	StartTime       time.Time // Year,Month,Day is ignored. Only hour,minute,second (since midnight) is important
+	Interval        time.Duration
+	Timeout         time.Duration
+	Exec            string
+	Params          []string
+	lastRun         time.Time
+	isRunningAtomic int32
 }
 
 type SortCommands struct {
@@ -70,6 +76,9 @@ func substitute_variables(params string, variables map[string]string) string {
 }
 
 func (c *Command) MustRun(now time.Time) bool {
+	if atomic.LoadInt32(&c.isRunningAtomic) != 0 {
+		return false
+	}
 	if c.isDaily() {
 		return c.Enabled && ((now.Sub(c.mostRecentStartTime(now)) < dailyCommandWindow) && (now.Sub(c.lastRun) > dailyCommandWindow))
 	} else {
@@ -116,36 +125,43 @@ func (c *Command) timeOverdue(now time.Time) time.Duration {
 }
 
 func (c *Command) Run(logger *log.Logger, variables map[string]string) {
-	c.lastRun = time.Now()
-	params := strings.Fields(substitute_variables(strings.Join(c.Params, " "), variables))
-	logger.Infof("Running %v (%v)", c.Exec, params)
-	cmd := exec.Command(c.Exec, params...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Start()
-	if err != nil {
-		logger.Errorf("Failed %v: %v", c.Name, err)
-		logger.Infof("stdout: " + stdout.String())
-		logger.Infof("stderr: " + stderr.String())
-	} else {
-		// wait or timeout
-		donec := make(chan error, 1)
-		go func() {
-			donec <- cmd.Wait()
-		}()
-		select {
-		case <-time.After(c.Timeout):
-			logger.Errorf("%v timed out after %v seconds.", c.Name, c.Timeout)
-			if !killProcessTree(cmd.Process.Pid) {
-				logger.Errorf("Failed to kill process.")
+	// It is important that we toggle isRunningAtomic = 1 from here.
+	// If we only toggled isRunningAtomic = 1 from inside the goroutine that we launch,
+	// then we'd be at risk of the function that called Run() trying to launch the same job twice.
+	atomic.StoreInt32(&c.isRunningAtomic, 1)
+	go func() {
+		defer atomic.StoreInt32(&c.isRunningAtomic, 0)
+		c.lastRun = time.Now()
+		params := strings.Fields(substitute_variables(strings.Join(c.Params, " "), variables))
+		logger.Infof("Running '%v' %v (%v)", c.Name, c.Exec, params)
+		cmd := exec.Command(c.Exec, params...)
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err := cmd.Start()
+		if err != nil {
+			logger.Errorf("Failed %v: %v", c.Name, err)
+			logger.Infof("stdout: " + stdout.String())
+			logger.Infof("stderr: " + stderr.String())
+		} else {
+			// wait or timeout
+			donec := make(chan error, 1)
+			go func() {
+				donec <- cmd.Wait()
+			}()
+			select {
+			case <-time.After(c.Timeout):
+				logger.Errorf("%v timed out after %v seconds.", c.Name, c.Timeout)
+				if !killProcessTree(cmd.Process.Pid) {
+					logger.Errorf("Failed to kill process.")
+				}
+			case <-donec:
+				// Success logs are just spammy.
+				//logger.Infof("Success %v", c.Name)
 			}
-		case <-donec:
-			// Success logs are just spammy.
-			//logger.Infof("Success %v", c.Name)
 		}
-	}
+	}()
 }
 
 func offsetFromStartOfDay(t time.Time) time.Duration {
@@ -155,17 +171,33 @@ func offsetFromStartOfDay(t time.Time) time.Duration {
 // Prioritize the list of commands, and return the next one (if any) that is ready to run.
 // If no command is ready to run, return nil
 func NextRunnable(cmd []*Command, now time.Time) *Command {
-	dup := make([]*Command, len(cmd))
-	copy(dup, cmd)
+
+	// Assemble the list of all busy pools
+	busyPools := map[string]bool{}
+	for _, c := range cmd {
+		if atomic.LoadInt32(&c.isRunningAtomic) != 0 {
+			busyPools[c.Pool] = true
+		}
+	}
+
+	// Produce a filtered list of commands that are runnable
+	// Are we doing something wrong by reading the atomic variable isRunning twice?
+	// Yes, but it's OK, because the behaviour here is conservative. A command cannot go
+	// from not-running to running, because this function is called from the one-and-only
+	// goroutine that launches commands.
+	filtered := []*Command{}
+	for _, c := range cmd {
+		if atomic.LoadInt32(&c.isRunningAtomic) == 0 && c.MustRun(now) && !busyPools[c.Pool] {
+			filtered = append(filtered, c)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
 	sortable := SortCommands{
-		List: dup,
+		List: filtered,
 		Now:  now,
 	}
 	sort.Sort(sort.Reverse(sortable))
-	for _, c := range sortable.List {
-		if c.MustRun(now) {
-			return c
-		}
-	}
-	return nil
+	return sortable.List[0]
 }

@@ -103,3 +103,54 @@ func TestDailyTasks(t *testing.T) {
 		}
 	}
 }
+
+func TestPools(t *testing.T) {
+	// To run a kind of "integration test" for the pools, replace the list of commands inside scheduler.go with this list:
+	//add(true, "sleep1", "poolA", 1*time.Second, 12*hour, `C:\Program Files (x86)\Git\bin\sleep.exe`, "10")
+	//add(true, "sleep2", "poolA", 1*time.Second, 12*hour, `C:\Program Files (x86)\Git\bin\sleep.exe`, "10")
+	//add(true, "sleep3", "poolA", 1*time.Second, 12*hour, `C:\Program Files (x86)\Git\bin\sleep.exe`, "10")
+	//add(true, "sleep4", "poolB", 1*time.Second, 12*hour, `C:\Program Files (x86)\Git\bin\sleep.exe`, "1")
+	// You'll see that sleep4 runs often, but sleep1-3 alternate between themselves.
+	// You also need to change "time.Sleep(5 * time.Second)"" inside run() from 5 to 1 second.
+
+	loc := time.FixedZone("Pretoria", -7200)
+	nowPresent := time.Date(2015, 07, 15, 5, 3, 20, 0, loc)
+
+	cmd := []*Command{}
+	add := func(name, pool string, lastRun time.Time) *Command {
+		c := &Command{
+			Enabled:  true,
+			Interval: 1 * time.Minute,
+			Name:     name,
+			Pool:     pool,
+			lastRun:  lastRun,
+		}
+		cmd = append(cmd, c)
+		return c
+	}
+	// The only reason we vary lastRun time is to get predictable priority sorting when all
+	// other things are equal
+	c_a := add("a", "import_pool", nowPresent.Add(-15*time.Hour))
+	add("b", "import_pool", nowPresent.Add(-14*time.Hour))
+	c_c := add("c", "update_pool", nowPresent.Add(-13*time.Hour))
+	c_d := add("d", "update_pool", nowPresent.Add(-12*time.Hour))
+
+	// import_pool is busy
+	c_a.isRunningAtomic = 1
+	if next := NextRunnable(cmd, nowPresent); next != c_c {
+		t.Fatal("Pools not respected, or ordering incorrect (1)")
+	}
+
+	// update_pool is busy
+	c_a.isRunningAtomic = 0
+	c_d.isRunningAtomic = 1
+	if next := NextRunnable(cmd, nowPresent); next != c_a {
+		t.Fatal("Pools not respected, or ordering incorrect (2)")
+	}
+
+	// both pools busy
+	c_a.isRunningAtomic = 1
+	if next := NextRunnable(cmd, nowPresent); next != nil {
+		t.Fatal("Pools not respected, or ordering incorrect (3)")
+	}
+}
