@@ -120,6 +120,9 @@ func addCommands() {
 
 	// Backups
 	add(true, "Backup", "backup", daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb").SetStartTime(23, 0)
+
+	// Pinging
+	add(true, "Ping", "ping", minute, 5*minute, "ruby", "c:\\imqsbin\\cronjobs\\ping_services.rb")
 }
 
 func cmdEnabledList() string {
