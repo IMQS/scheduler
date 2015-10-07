@@ -123,6 +123,9 @@ func addCommands() {
 
 	// Pinging
 	add(true, "Ping", "ping", minute, 5*minute, "ruby", "c:\\imqsbin\\cronjobs\\ping_services.rb")
+
+	// Theme saver
+	add(true, "Theme saver", "set themes", minute, 5*minute, "ruby", "c:\\imqsbin\\conftools\\theme_saver.rb", "set_for_edit")
 }
 
 func cmdEnabledList() string {
