@@ -141,7 +141,7 @@ func (c *Command) Run(logger *log.Logger, variables map[string]string) {
 		cmd.Stderr = &stderr
 		err := cmd.Start()
 		if err != nil {
-			logger.Errorf("Failed %v: %v", c.Name, err)
+			logger.Errorf("Failed to start %v: %v", c.Name, err)
 			logger.Infof("stdout: " + stdout.String())
 			logger.Infof("stderr: " + stderr.String())
 		} else {
@@ -159,6 +159,11 @@ func (c *Command) Run(logger *log.Logger, variables map[string]string) {
 			case <-donec:
 				// Success logs are just spammy.
 				//logger.Infof("Success %v", c.Name)
+				if !cmd.ProcessState.Success() {
+					logger.Errorf("Finished with error: %v", c.Name)
+					logger.Infof("stdout: " + stdout.String())
+					logger.Infof("stderr: " + stderr.String())
+				}
 			}
 		}
 	}()
