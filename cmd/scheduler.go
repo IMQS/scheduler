@@ -130,6 +130,10 @@ func addCommands() {
 
 	vacuum := add(true, "Search Vacuum", heavy_daily_pool, daily, 5*hour, "c:\\imqsbin\\bin\\imqssearch.exe", "-c=c:\\imqsbin\\conf\\search.json", "vacuum")
 	vacuum.SetStartTime(2, 0)
+
+	// Theme saver
+	add(false, "Theme saver", "set themes", minute, 5*minute, "ruby", "c:\\imqsbin\\conftools\\theme_saver.rb", "prepare_for_edit")
+
 }
 
 func cmdEnabledList() string {
