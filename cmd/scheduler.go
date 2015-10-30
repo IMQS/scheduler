@@ -116,13 +116,13 @@ func addCommands() {
 	add(true, "Docs Importer", import_pool, 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
 
 	// Updaters
-	add(true, "ImqsConf Update", update_pool, 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf")
-	add(true, "ImqsBin Update", update_pool, 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin")
+	add(true, "ImqsConf Update", update_pool, 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf -prod")
+	add(true, "ImqsBin Update", update_pool, 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin -prod")
 
 	// Other
 	add(true, "Ping", "ping", minute, 5*minute, "ruby", "c:\\imqsbin\\cronjobs\\ping_services.rb")
 	add(true, "Auth Log Scraper", "logscrape", 24*hour, 24*hour, "ruby", "c:\\imqsbin\\cronjobs\\logscrape.rb")
-	add(true, "Theme saver", "theme_saver", minute, 5*minute, "ruby", "c:\\imqsbin\\conftools\\theme_saver.rb", "prepare_for_edit")
+	add(false, "Theme saver", "theme_saver", minute, 5*minute, "ruby", "c:\\imqsbin\\conftools\\theme_saver.rb", "prepare_for_edit")
 
 	// Heavy daily pool
 	backup := add(true, "Backup", heavy_daily_pool, daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb")
@@ -130,10 +130,6 @@ func addCommands() {
 
 	vacuum := add(true, "Search Vacuum", heavy_daily_pool, daily, 5*hour, "c:\\imqsbin\\bin\\imqssearch.exe", "-c=c:\\imqsbin\\conf\\search.json", "vacuum")
 	vacuum.SetStartTime(2, 0)
-
-	// Theme saver
-	add(false, "Theme saver", "set themes", minute, 5*minute, "ruby", "c:\\imqsbin\\conftools\\theme_saver.rb", "prepare_for_edit")
-
 }
 
 func cmdEnabledList() string {
