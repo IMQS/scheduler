@@ -48,7 +48,7 @@ const agpFileContent = `<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 
 // CreateAGP takes the static content in "agpFileContent", adds the correct filename and then
 // writes the data to the file in the matching folder
-func CreateAGP(fileName string) bool {
+func CreateAGP(pathName string, fileName string) bool {
 	// Remove the extension from the fileName
 	fileName = strings.TrimSuffix(fileName, filepath.Ext(fileName))
 
@@ -57,7 +57,7 @@ func CreateAGP(fileName string) bool {
 	agpFile := r.ReplaceAllString(agpFileContent, fileName)
 
 	// Create the file
-	file, err := os.Create("C:/imqsvar/staging/za.--.--.--_Generic_" + fileName + "/Optional#" + fileName + ".agp")
+	file, err := os.Create(pathName + "/za.--.--.--_Generic_" + fileName + "/Optional#" + fileName + ".agp")
 	if err != nil {
 		return false
 	}

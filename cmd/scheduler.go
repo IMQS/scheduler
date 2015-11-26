@@ -187,7 +187,7 @@ func handleHttpFunction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the AGP file required for the shape file import to work
-	if scheduler.CreateAGP(fileName) != true {
+	if scheduler.CreateAGP(config.ImportPath, fileName) != true {
 		http.Error(w, "Could not create AGP file", http.StatusInternalServerError)
 		return
 	}

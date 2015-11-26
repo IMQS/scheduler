@@ -12,6 +12,7 @@ type Config struct {
 	HttpService  string
 	Httpport     string
 	Schedulerurl string
+	ImportPath   string
 }
 
 func (c *Config) LoadFile(filename string) error {
