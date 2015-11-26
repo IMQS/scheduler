@@ -24,8 +24,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
+	"net/http"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"time"
@@ -166,7 +169,60 @@ func loadConfig() {
 	}
 }
 
+// This method handles the http request used to start a job.
+// Currently this is build specifically to generate a AGP file
+// in a specific location and then kick of a imqstool importer job.
+func handleHttpFunction(w http.ResponseWriter, r *http.Request) {
+	// Retrieve the query from the url in the request
+	parsedUrl, err := url.Parse(r.RequestURI)
+	if err != nil {
+		http.Error(w, fmt.Sprint(err), http.StatusInternalServerError)
+	}
+	fileName := parsedUrl.Query().Get("filename")
+
+	// If a file name is not sent together with the URL return
+	if len(fileName) == 0 {
+		http.Error(w, "Filename not specified", http.StatusBadRequest)
+		return
+	}
+
+	// Create the AGP file required for the shape file import to work
+	if scheduler.CreateAGP(config.ImportPath, fileName) != true {
+		http.Error(w, "Could not create AGP file", http.StatusInternalServerError)
+		return
+	}
+
+	// Look for the Importer command in the list of commands
+	var newCommand *scheduler.Command
+	for _, cmd := range commands {
+		if cmd.Name == "ImqsTool Importer" {
+			newCommand = cmd
+		}
+	}
+	if newCommand == nil {
+		http.Error(w, "Failed to retrieve import command", http.StatusInternalServerError)
+		return
+	}
+
+	// Change the importer command and then start the import job immediately
+	var cmds []*scheduler.Command
+	newCommand.StartTime = time.Now() // Set the importer start time to now so that it will run immediately
+	cmds = append(cmds, newCommand)
+
+	next := scheduler.NextRunnable(cmds, time.Now())
+	if next != nil {
+		next.Run(logger, config.Variables)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func run() {
+	if config.HttpService == "Enabled" {
+		http.HandleFunc(config.Schedulerurl, handleHttpFunction)
+		go http.ListenAndServe(config.Httpport, nil)
+	}
+
 	for {
 		next := scheduler.NextRunnable(commands, time.Now())
 		if next != nil {

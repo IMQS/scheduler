@@ -6,9 +6,13 @@ import (
 )
 
 type Config struct {
-	Variables map[string]string
-	Enabled   []string
-	Disabled  []string
+	Variables    map[string]string
+	Enabled      []string
+	Disabled     []string
+	HttpService  string
+	Httpport     string
+	Schedulerurl string
+	ImportPath   string
 }
 
 func (c *Config) LoadFile(filename string) error {
