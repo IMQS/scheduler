@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
+	"net/http"
 	"os/exec"
 	"strconv"
 	"time"
@@ -166,7 +167,36 @@ func loadConfig() {
 	}
 }
 
+// This method handles the http request used to start a job.
+func handleHttpFunction(w http.ResponseWriter, r *http.Request) {
+	// Look for the Importer command in the list of commands
+	var newCommand scheduler.Command
+	for _, cmd := range commands {
+		if cmd.Name == "ImqsTool Importer" {
+			newCommand = *cmd
+		}
+	}
+	if len(newCommand.Name) == 0 {
+		http.Error(w, "Failed to retrieve import command", http.StatusInternalServerError)
+		return
+	}
+
+	// Change the importer command and then start the import job immediately
+	newCommand.StartTime = time.Now() // Set the importer start time to now so that it will run immediately
+	next := scheduler.NextRunnable([]*scheduler.Command{&newCommand}, time.Now())
+	if next != nil {
+		next.Run(logger, config.Variables)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func run() {
+	if config.HttpService == "Enabled" {
+		http.HandleFunc(config.Schedulerurl, handleHttpFunction)
+		go http.ListenAndServe(config.Httpport, nil)
+	}
+
 	for {
 		next := scheduler.NextRunnable(commands, time.Now())
 		if next != nil {
