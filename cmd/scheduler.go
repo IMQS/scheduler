@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
+	"net/http"
 	"os/exec"
 	"strconv"
 	"time"
@@ -166,13 +167,51 @@ func loadConfig() {
 	}
 }
 
-func run() {
-	for {
-		next := scheduler.NextRunnable(commands, time.Now())
-		if next != nil {
-			next.Run(logger, config.Variables)
+// This method handles the http request used to start a job.
+func runCommandNow(commandName string) {
+	// Look for the Importer command in the list of commands
+	var command *scheduler.Command
+	for _, cmd := range commands {
+		if cmd.Name == commandName {
+			command = cmd
 		}
-		time.Sleep(5 * time.Second)
-		loadConfig()
+	}
+	if len(command.Name) == 0 {
+		logger.Errorf("Error cannot find requested command provided in url")
+		return
+	}
+	command.Run(logger, config.Variables)
+}
+
+func run() {
+	tickChan := time.NewTicker(time.Second * 5).C
+	httpChan := make(chan string)
+
+	http.HandleFunc("/scheduler/", func(w http.ResponseWriter, r *http.Request) {
+		commandName := r.FormValue("command")
+		if len(commandName) == 0 {
+			http.Error(w, "Command name missing from request", http.StatusBadRequest)
+			return
+		}
+		httpChan <- commandName
+		w.WriteHeader(http.StatusOK)
+	})
+	go http.ListenAndServe(":2014", nil)
+
+	for {
+		select {
+		case commandName := <-httpChan:
+			{
+				runCommandNow(commandName)
+			}
+		case <-tickChan:
+			{
+				next := scheduler.NextRunnable(commands, time.Now())
+				if next != nil {
+					next.Run(logger, config.Variables)
+				}
+				loadConfig()
+			}
+		}
 	}
 }
