@@ -168,41 +168,50 @@ func loadConfig() {
 }
 
 // This method handles the http request used to start a job.
-func handleHttpFunction(w http.ResponseWriter, r *http.Request) {
+func runCommandNow(commandName string) {
 	// Look for the Importer command in the list of commands
-	var newCommand scheduler.Command
+	var command *scheduler.Command
 	for _, cmd := range commands {
-		if cmd.Name == "ImqsTool Importer" {
-			newCommand = *cmd
+		if cmd.Name == commandName {
+			command = cmd
 		}
 	}
-	if len(newCommand.Name) == 0 {
-		http.Error(w, "Failed to retrieve import command", http.StatusInternalServerError)
+	if len(command.Name) == 0 {
+		logger.Errorf("Error cannot find requested command provided in url")
 		return
 	}
-
-	// Change the importer command and then start the import job immediately
-	newCommand.StartTime = time.Now() // Set the importer start time to now so that it will run immediately
-	next := scheduler.NextRunnable([]*scheduler.Command{&newCommand}, time.Now())
-	if next != nil {
-		next.Run(logger, config.Variables)
-	}
-
-	w.WriteHeader(http.StatusOK)
+	command.Run(logger, config.Variables)
 }
 
 func run() {
-	if config.HttpService == "Enabled" {
-		http.HandleFunc(config.Schedulerurl, handleHttpFunction)
-		go http.ListenAndServe(config.Httpport, nil)
-	}
+	tickChan := time.NewTicker(time.Second * 5).C
+	httpChan := make(chan string)
+
+	http.HandleFunc("/scheduler/", func(w http.ResponseWriter, r *http.Request) {
+		commandName := r.FormValue("command")
+		if len(commandName) == 0 {
+			http.Error(w, "Command name missing from request", http.StatusBadRequest)
+			return
+		}
+		httpChan <- commandName
+		w.WriteHeader(http.StatusOK)
+	})
+	go http.ListenAndServe(":2014", nil)
 
 	for {
-		next := scheduler.NextRunnable(commands, time.Now())
-		if next != nil {
-			next.Run(logger, config.Variables)
+		select {
+		case commandName := <-httpChan:
+			{
+				runCommandNow(commandName)
+			}
+		case <-tickChan:
+			{
+				next := scheduler.NextRunnable(commands, time.Now())
+				if next != nil {
+					next.Run(logger, config.Variables)
+				}
+				loadConfig()
+			}
 		}
-		time.Sleep(5 * time.Second)
-		loadConfig()
 	}
 }
