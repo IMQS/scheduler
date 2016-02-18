@@ -129,6 +129,9 @@ func addCommands() {
 	backup := add(true, "Backup", heavy_daily_pool, daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb")
 	backup.SetStartTime(23, 0)
 
+	cleanup := add(true, "Cleanup", heavy_daily_pool, daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\cleanup.rb")
+	cleanup.SetStartTime(1, 0)
+
 	vacuum := add(true, "Search Vacuum", heavy_daily_pool, daily, 5*hour, "c:\\imqsbin\\bin\\imqssearch.exe", "-c=c:\\imqsbin\\conf\\search.json", "vacuum")
 	vacuum.SetStartTime(2, 0)
 }
