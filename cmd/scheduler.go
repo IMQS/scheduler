@@ -107,18 +107,23 @@ func addCommands() {
 	// The second parameter here is the job pool. For any pool, at most one job can be running. For example, we have two jobs
 	// in the "update" pool, so only one of them can be running at a time.
 
-	import_pool := "import"
-	update_pool := "update"
-	heavy_daily_pool := "heavy_daily" // Jobs that run once a day (at night), and drain a machine's resources
+	// Imports and update are mutually exclusive. We don't want to interrupt an import with an update, nor vice versa,
+	// and this is why we place them both in the same pool. They have their own independent "lock file" mechanisms
+	// to ensure that they never run concurrently, but then we end up with a bunch of error messages in our log file,
+	// so we simply prevent that from ever happening here by placing them in the same pool.
+	import_update_pool := "import_update"
+
+	// Jobs that run once a day (at night), and drain a machine's resources
+	heavy_daily_pool := "heavy_daily"
 
 	// Imports
-	add(true, "Locator", import_pool, 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
-	add(true, "ImqsTool Importer", import_pool, 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
-	add(true, "Docs Importer", import_pool, 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
+	add(true, "Locator", import_update_pool, 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
+	add(true, "ImqsTool Importer", import_update_pool, 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
+	add(true, "Docs Importer", import_update_pool, 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
 
 	// Updaters
-	add(true, "ImqsConf Update", update_pool, 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf -prod")
-	add(true, "ImqsBin Update", update_pool, 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin -prod")
+	add(true, "ImqsConf Update", import_update_pool, 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf -prod")
+	add(true, "ImqsBin Update", import_update_pool, 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin -prod")
 
 	// Other
 	add(true, "Ping", "ping", minute, 5*minute, "ruby", "c:\\imqsbin\\cronjobs\\ping_services.rb")
