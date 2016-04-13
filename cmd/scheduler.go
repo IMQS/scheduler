@@ -29,12 +29,13 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var commands []*scheduler.Command
-var config scheduler.Config
 var logger *log.Logger
+var config scheduler.Config
 
 const (
 	taskConfUpdate = "ImqsConf Update"
@@ -44,7 +45,6 @@ func main() {
 	logger = log.New("c:/imqsvar/logs/scheduler.log")
 
 	setDefaultVariables()
-	addCommands()
 	loadConfig()
 
 	logger.Infof("Scheduler starting")
@@ -86,59 +86,136 @@ func setDefaultVariables() {
 	}
 }
 
-func addCommands() {
-	add := func(enabled bool, name, pool string, interval time.Duration, timeout time.Duration, exec string, params ...string) *scheduler.Command {
-		commands = append(commands, &scheduler.Command{
-			Name:     name,
-			Pool:     pool,
-			Interval: interval,
-			Timeout:  timeout,
-			Exec:     exec,
-			Params:   params,
-			Enabled:  enabled,
-		})
-		return commands[len(commands)-1]
+func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *scheduler.Command {
+	// Convert time from string into time.Duration format
+	interval, err := time.ParseDuration(cmd.Interval)
+	if err != nil {
+		logger.Errorf("Error parsing interval for task '%s': %v", cmd.Name, err)
+		interval = 1 * time.Hour
+	}
+	timeout, err := time.ParseDuration(cmd.Timeout)
+	if err != nil {
+		logger.Errorf("Error parsing timeout for task '%s': %v", cmd.Name, err)
+		timeout = 8 * time.Hour
 	}
 
-	minute := time.Minute
-	hour := time.Hour
-	daily := 24 * time.Hour
+	// Sanity checks
+	if interval < (5 * time.Second) {
+		logger.Errorf("Invalid interval of less than 5 seconds for task '%v'", cmd.Name)
+	}
+	if interval > (24 * time.Hour) {
+		logger.Errorf("Invalid interval of more than 24 hours for task '%v'", cmd.Name)
+	}
+	if timeout < (5 * time.Second) {
+		logger.Errorf("Invalid timeout of less than 5 seconds for task '%v'", cmd.Name)
+	}
+	if timeout > (24 * time.Hour) {
+		logger.Errorf("Invalid timeout of more than 24 hours for task '%v'", cmd.Name)
+	}
+	if len(strings.TrimSpace(cmd.Name)) == 0 {
+		logger.Errorf("Invalid empty task name for command '%v'", cmd.Command)
+	}
+	if len(strings.TrimSpace(cmd.Command)) == 0 {
+		logger.Errorf("Invalid empty command for task '%v'", cmd.Name)
+	}
 
-	// The second parameter here is the job pool. For any pool, at most one job can be running. For example, we have two jobs
-	// in the "update" pool, so only one of them can be running at a time.
+	newCommand := &scheduler.Command{
+		Name:     cmd.Name,
+		Pool:     cmd.Pool,
+		Interval: interval,
+		Timeout:  timeout,
+		Exec:     cmd.Command,
+		Params:   cmd.Params,
+		Enabled:  isEnabled,
+	}
 
-	// Imports and update are mutually exclusive. We don't want to interrupt an import with an update, nor vice versa,
-	// and this is why we place them both in the same pool. They have their own independent "lock file" mechanisms
-	// to ensure that they never run concurrently, but then we end up with a bunch of error messages in our log file,
-	// so we simply prevent that from ever happening here by placing them in the same pool.
-	import_update_pool := "import_update"
+	start_time, err := time.ParseDuration(cmd.StartTime)
+	if err == nil {
+		hours := int(start_time / time.Hour)
+		start_time -= time.Duration(hours) * time.Hour
+		minutes := int(start_time / time.Minute)
+		newCommand.SetStartTime(hours, minutes)
+	} else {
+		logger.Errorf("Error parsing start time for cmd '%v': %v", cmd.Name, err)
+	}
 
-	// Jobs that run once a day (at night), and drain a machine's resources
-	heavy_daily_pool := "heavy_daily"
+	return newCommand
+}
 
-	// Imports
-	add(true, "Locator", import_update_pool, 15, 2*hour, "c:\\imqsbin\\bin\\imqstool", "locator", "imqs", "!LOCATOR_SRC", "c:\\imqsvar\\staging", "!JOB_SERVICE_URL", "!LEGACY_LOCK_DIR")
-	add(true, "ImqsTool Importer", import_update_pool, 15, 6*hour, "c:\\imqsbin\\bin\\imqstool", "importer", "!LEGACY_LOCK_DIR", "!JOB_SERVICE_URL")
-	add(true, "Docs Importer", import_update_pool, 15, 2*hour, "ruby", "c:\\imqsbin\\jsw\\ImqsDocs\\importer\\importer.rb")
+func loadConfig() {
+	if err := config.LoadFile("c:/imqsbin/static-conf/scheduled-tasks.json"); err != nil {
+		logger.Errorf("Error loading static config file 'scheduled-tasks.json': %v", err)
+	}
 
-	// Updaters
-	add(true, "ImqsConf Update", import_update_pool, 5*minute, 30*minute, "c:\\imqsbin\\cronjobs\\update_runner.bat", "conf -prod")
-	add(true, "ImqsBin Update", import_update_pool, 5*minute, 2*hour, "c:\\imqsbin\\cronjobs\\update_runner.bat", "imqsbin -prod")
+	// Build map of enabled jobs
+	var enabledMap map[string]bool = make(map[string]bool)
+	for _, e := range config.Enabled {
+		enabledMap[e] = true
+	}
+	for _, e := range config.Disabled {
+		enabledMap[e] = false
+	}
 
-	// Other
-	add(true, "Ping", "ping", minute, 5*minute, "ruby", "c:\\imqsbin\\cronjobs\\ping_services.rb")
-	add(true, "Auth Log Scraper", "logscrape", 24*hour, 24*hour, "ruby", "c:\\imqsbin\\cronjobs\\logscrape.rb")
-	add(false, "Theme saver", "theme_saver", minute, 5*minute, "ruby", "c:\\imqsbin\\conftools\\theme_saver.rb", "prepare_for_edit")
+	// Overlay the client config over commands defined in the static config
+	var overlayConfig scheduler.Config
+	if err := overlayConfig.LoadFile("c:/imqsbin/conf/scheduled-tasks.json"); err != nil {
+		logger.Errorf("Error loading client config file 'scheduled-tasks.json': %v", err)
+	}
 
-	// Heavy daily pool
-	backup := add(true, "Backup", heavy_daily_pool, daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\backup_v8.rb")
-	backup.SetStartTime(23, 0)
+	// Overlay variables
+	for key, value := range overlayConfig.Variables {
+		config.Variables[key] = value
+	}
 
-	cleanup := add(true, "Cleanup", heavy_daily_pool, daily, 12*hour, "ruby", "c:\\imqsbin\\cronjobs\\cleanup.rb")
-	cleanup.SetStartTime(1, 0)
+	// Build map of enabled jobs
+	for _, e := range overlayConfig.Enabled {
+		enabledMap[e] = true
+	}
+	for _, e := range overlayConfig.Disabled {
+		enabledMap[e] = false
+	}
 
-	vacuum := add(true, "Search Vacuum", heavy_daily_pool, daily, 5*hour, "c:\\imqsbin\\bin\\imqssearch.exe", "-c=c:\\imqsbin\\conf\\search.json", "vacuum")
-	vacuum.SetStartTime(2, 0)
+	// Replace tasks if needed
+	for _, t := range overlayConfig.Commands {
+		foundCommand := false
+		for i, c := range config.Commands {
+			if c.Name == t.Name {
+				foundCommand = true
+				config.Commands[i] = t
+				break
+			}
+		}
+
+		// If command wasn't found, add it
+		if !foundCommand {
+			config.Commands = append(config.Commands, t)
+		}
+	}
+
+	// Add or overwrite to commands array
+	// Don't clobber things like 'lastRun' and 'isRunningAtomic' for existing commands
+	for _, t := range config.Commands {
+		newCommand := buildCommandFromConfig(t, enabledMap[t.Name])
+
+		foundCommand := false
+		for i, c := range commands {
+			if newCommand.Name == c.Name {
+				foundCommand = true
+				commands[i].Pool = newCommand.Pool
+				commands[i].Enabled = newCommand.Enabled
+				commands[i].StartTime = newCommand.StartTime
+				commands[i].Interval = newCommand.Interval
+				commands[i].Timeout = newCommand.Timeout
+				commands[i].Exec = newCommand.Exec
+				commands[i].Params = newCommand.Params
+				break
+			}
+		}
+
+		if !foundCommand {
+			commands = append(commands, newCommand)
+		}
+	}
 }
 
 func cmdEnabledList() string {
@@ -152,26 +229,6 @@ func cmdEnabledList() string {
 		return list[0 : len(list)-2]
 	} else {
 		return list
-	}
-}
-
-func loadConfig() {
-	if err := config.LoadFile("c:/imqsbin/conf/scheduled-tasks.json"); err != nil {
-		logger.Errorf("Error loading config file 'scheduled-tasks.json': %v", err)
-	}
-	for _, name := range config.Enabled {
-		for _, c := range commands {
-			if c.Name == name {
-				c.Enabled = true
-			}
-		}
-	}
-	for _, name := range config.Disabled {
-		for _, c := range commands {
-			if c.Name == name {
-				c.Enabled = false
-			}
-		}
 	}
 }
 

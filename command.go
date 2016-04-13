@@ -176,7 +176,6 @@ func offsetFromStartOfDay(t time.Time) time.Duration {
 // Prioritize the list of commands, and return the next one (if any) that is ready to run.
 // If no command is ready to run, return nil
 func NextRunnable(cmd []*Command, now time.Time) *Command {
-
 	// Assemble the list of all busy pools
 	busyPools := map[string]bool{}
 	for _, c := range cmd {
