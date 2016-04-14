@@ -5,6 +5,16 @@ import (
 	"io/ioutil"
 )
 
+type ConfigCommand struct {
+	Name      string
+	Pool      string
+	Interval  string
+	Timeout   string
+	Command   string
+	Params    []string
+	StartTime string
+}
+
 type Config struct {
 	Variables    map[string]string
 	Enabled      []string
@@ -12,6 +22,7 @@ type Config struct {
 	HttpService  string
 	Httpport     string
 	Schedulerurl string
+	Commands     []ConfigCommand
 }
 
 func (c *Config) LoadFile(filename string) error {
