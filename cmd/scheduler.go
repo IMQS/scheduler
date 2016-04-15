@@ -88,8 +88,10 @@ func setDefaultVariables() {
 
 func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *scheduler.Command {
 	// Convert time from string into time.Duration format
+	haveInterval := true
 	interval, err := time.ParseDuration(cmd.Interval)
 	if err != nil {
+		haveInterval = false
 		logger.Errorf("Error parsing interval for task '%s': %v", cmd.Name, err)
 		interval = 1 * time.Hour
 	}
@@ -129,14 +131,17 @@ func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *schedu
 		Enabled:  isEnabled,
 	}
 
-	start_time, err := time.ParseDuration(cmd.StartTime)
-	if err == nil {
-		hours := int(start_time / time.Hour)
-		start_time -= time.Duration(hours) * time.Hour
-		minutes := int(start_time / time.Minute)
-		newCommand.SetStartTime(hours, minutes)
-	} else {
-		logger.Errorf("Error parsing start time for cmd '%v': %v", cmd.Name, err)
+	// Only try parsing start time when interval value is valid and this is daily task
+	if haveInterval && interval == 24*time.Hour {
+		start_time, err := time.ParseDuration(cmd.StartTime)
+		if err == nil {
+			hours := int(start_time / time.Hour)
+			start_time -= time.Duration(hours) * time.Hour
+			minutes := int(start_time / time.Minute)
+			newCommand.SetStartTime(hours, minutes)
+		} else {
+			logger.Errorf("Error parsing start time for daily task '%v': %v", cmd.Name, err)
+		}
 	}
 
 	return newCommand
