@@ -169,6 +169,19 @@ func (c *Command) Run(logger *log.Logger, variables map[string]string) {
 	}()
 }
 
+func (c *Command) Debug(logger *log.Logger) {
+	logger.Infof("  %v:\n", c.Name)
+	logger.Infof("    Pool:            '%v'\n", c.Pool)
+	logger.Infof("    Enabled:         '%v'\n", c.Enabled)
+	logger.Infof("    StartTime:       '%v'\n", c.StartTime)
+	logger.Infof("    Interval:        '%v'\n", c.Interval)
+	logger.Infof("    Timeout:         '%v'\n", c.Timeout)
+	logger.Infof("    Exec:            '%v'\n", c.Exec)
+	logger.Infof("    Params:          '%v'\n", c.Params)
+	logger.Infof("    lastRun:         '%v'\n", c.lastRun)
+	logger.Infof("    isRunningAtomic: '%v'\n", c.isRunningAtomic)
+}
+
 func offsetFromStartOfDay(t time.Time) time.Duration {
 	return time.Second * time.Duration(t.Hour()*3600+t.Minute()*60+t.Second())
 }

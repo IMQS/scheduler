@@ -37,10 +37,6 @@ var commands []*scheduler.Command
 var logger *log.Logger
 var config scheduler.Config
 
-const (
-	taskConfUpdate = "ImqsConf Update"
-)
-
 func main() {
 	logger = log.New("c:/imqsvar/logs/scheduler.log")
 
@@ -50,6 +46,7 @@ func main() {
 	logger.Infof("Scheduler starting")
 	logger.Infof("Variables: %v", config.Variables)
 	logger.Infof("Enabled: %v", cmdEnabledList())
+	debugCommands()
 
 	if !scheduler.RunAsService(run) {
 		run()
@@ -145,6 +142,13 @@ func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *schedu
 	}
 
 	return newCommand
+}
+
+func debugCommands() {
+	logger.Infof("Commands:\n")
+	for _, c := range commands {
+		c.Debug(logger)
+	}
 }
 
 func loadConfig() {
