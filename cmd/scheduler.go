@@ -24,6 +24,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/IMQS/cli"
 	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
 	"net/http"
@@ -36,29 +38,29 @@ import (
 var commands []*scheduler.Command
 var logger *log.Logger
 var config scheduler.Config
+var imqsHttpPort int
 
 const (
-	taskConfUpdate = "ImqsConf Update"
+	taskConfUpdate    = "ImqsConf Update"
+	schedulerHttpPort = ":2014"
 )
 
 func main() {
 	logger = log.New("c:/imqsvar/logs/scheduler.log")
 
-	setDefaultVariables()
-	loadConfig()
-
-	logger.Infof("Scheduler starting")
-	logger.Infof("Variables: %v", config.Variables)
-	logger.Infof("Enabled: %v", cmdEnabledList())
-
-	if !scheduler.RunAsService(run) {
-		run()
-	}
-
-	logger.Infof("Exiting")
+	app := cli.App{}
+	app.Description = "ImqsScheduler -c=config [options] command"
+	cmd := app.AddCommand("run", "Launch the scheduler\nIf launched by the Windows Service dispatcher, then automatically run as a service. Otherwise, run in the foreground.")
+	cmd.AddValueOption("c", "path", "Scheduler config file")
+	cmd.AddValueOption("auxconfig", "path", "Auxiliary scheduler config file. If specified, this is overlayed on top of the main config file.")
+	app.DefaultExec = execApp
+	app.Run()
 }
 
 func getImqsHttpPort() int {
+	if imqsHttpPort != 0 {
+		return imqsHttpPort
+	}
 	defaultPort := 80
 	cmd := exec.Command("c:\\imqsbin\\bin\\imqsrouter.exe", "-show-http-port", "-mainconfig", "c:\\imqsbin\\static-conf\\router-config.json", "-auxconfig", "c:\\imqsbin\\conf\\router-config.json")
 	outBuf := &bytes.Buffer{}
@@ -71,13 +73,14 @@ func getImqsHttpPort() int {
 		logger.Errorf("Error reading http port from router: %v", err)
 		return defaultPort
 	} else {
+		imqsHttpPort = port
 		return port
 	}
 }
 
 func setDefaultVariables() {
 	imqsHttpPort := getImqsHttpPort()
-	config.Variables = make(map[string]string)
+	config.Variables = map[string]string{}
 	config.Variables["LOCATOR_SRC"] = "c:\\imqsvar\\imports"
 	config.Variables["LEGACY_LOCK_DIR"] = "c:\\imqsvar\\locks" // No longer needed, since we serialize all scheduled tasks. Should remove from imqstool.
 	config.Variables["JOB_SERVICE_URL"] = "http://localhost"
@@ -147,55 +150,63 @@ func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *schedu
 	return newCommand
 }
 
-func loadConfig() {
-	if err := config.LoadFile("c:/imqsbin/static-conf/scheduled-tasks.json"); err != nil {
-		logger.Errorf("Error loading static config file 'scheduled-tasks.json': %v", err)
-	}
-
-	// Build map of enabled jobs
-	var enabledMap map[string]bool = make(map[string]bool)
-	for _, e := range config.Enabled {
+func toggleEnabled(enabledMap map[string]bool, enabled, disabled []string) {
+	for _, e := range enabled {
 		enabledMap[e] = true
 	}
-	for _, e := range config.Disabled {
+	for _, e := range disabled {
 		enabledMap[e] = false
 	}
+}
 
-	// Overlay the client config over commands defined in the static config
-	var overlayConfig scheduler.Config
-	if err := overlayConfig.LoadFile("c:/imqsbin/conf/scheduled-tasks.json"); err != nil {
-		logger.Errorf("Error loading client config file 'scheduled-tasks.json': %v", err)
+func loadConfig(mainConfigPath, auxConfigPath string) {
+	config = scheduler.Config{}
+	setDefaultVariables()
+
+	if err := config.LoadFile(mainConfigPath); err != nil {
+		logger.Errorf("Error loading config file %v: %v", mainConfigPath, err)
 	}
 
-	// Overlay variables
-	for key, value := range overlayConfig.Variables {
-		config.Variables[key] = value
-	}
+	if auxConfigPath != "" {
+		// Overlay the aux config over the static config
+		var overlayConfig scheduler.Config
+		if err := overlayConfig.LoadFile(auxConfigPath); err != nil {
+			logger.Errorf("Error loading aux config file %v: %v", auxConfigPath, err)
+		} else {
+			for key, value := range overlayConfig.Variables {
+				config.Variables[key] = value
+			}
 
-	// Build map of enabled jobs
-	for _, e := range overlayConfig.Enabled {
-		enabledMap[e] = true
-	}
-	for _, e := range overlayConfig.Disabled {
-		enabledMap[e] = false
-	}
+			for _, cmd := range overlayConfig.Enabled {
+				config.SetCommandEnabled(cmd, true)
+			}
 
-	// Replace tasks if needed
-	for _, t := range overlayConfig.Commands {
-		foundCommand := false
-		for i, c := range config.Commands {
-			if c.Name == t.Name {
-				foundCommand = true
-				config.Commands[i] = t
-				break
+			for _, cmd := range overlayConfig.Disabled {
+				config.SetCommandEnabled(cmd, false)
+			}
+
+			// Replace tasks if needed
+			for _, t := range overlayConfig.Commands {
+				foundCommand := false
+				for i, c := range config.Commands {
+					if c.Name == t.Name {
+						foundCommand = true
+						config.Commands[i] = t
+						break
+					}
+				}
+
+				// If command wasn't found, add it
+				if !foundCommand {
+					config.Commands = append(config.Commands, t)
+				}
 			}
 		}
-
-		// If command wasn't found, add it
-		if !foundCommand {
-			config.Commands = append(config.Commands, t)
-		}
 	}
+
+	// Build map of enabled jobs
+	enabledMap := map[string]bool{}
+	toggleEnabled(enabledMap, config.Enabled, config.Disabled)
 
 	// Add or overwrite to commands array
 	// Don't clobber things like 'lastRun' and 'isRunningAtomic' for existing commands
@@ -213,6 +224,7 @@ func loadConfig() {
 				commands[i].Timeout = newCommand.Timeout
 				commands[i].Exec = newCommand.Exec
 				commands[i].Params = newCommand.Params
+				commands[i].Enabled = enabledMap[t.Name]
 				break
 			}
 		}
@@ -253,7 +265,42 @@ func runCommandNow(commandName string) {
 	command.Run(logger, config.Variables)
 }
 
-func run() {
+func execApp(name string, args []string, options cli.OptionSet) int {
+	switch name {
+	case "run":
+		if !options.Has("c") {
+			logger.Error("No config specified")
+			fmt.Printf("No config specified")
+			return 1
+		}
+		runWrapper := func() {
+			run(options)
+		}
+		if !scheduler.RunAsService(runWrapper) {
+			runWrapper()
+		}
+
+		logger.Infof("Exiting")
+		return 0
+	default:
+		return 1
+	}
+}
+
+func run(options cli.OptionSet) {
+	lastConfigHash := ""
+	reloadConfig := func() {
+		loadConfig(options["c"], options["auxconfig"])
+		if config.HashSignature() != lastConfigHash {
+			lastConfigHash = config.HashSignature()
+			logger.Infof("Variables: %v", config.Variables)
+			logger.Infof("Enabled: %v", cmdEnabledList())
+		}
+	}
+	reloadConfig()
+
+	logger.Infof("Scheduler starting")
+
 	tickChan := time.NewTicker(time.Second * 5).C
 	httpChan := make(chan string)
 
@@ -266,7 +313,7 @@ func run() {
 		httpChan <- commandName
 		w.WriteHeader(http.StatusOK)
 	})
-	go http.ListenAndServe(":2014", nil)
+	go http.ListenAndServe(schedulerHttpPort, nil)
 
 	for {
 		select {
@@ -280,7 +327,7 @@ func run() {
 				if next != nil {
 					next.Run(logger, config.Variables)
 				}
-				loadConfig()
+				reloadConfig()
 			}
 		}
 	}

@@ -75,6 +75,14 @@ func substitute_variables(params string, variables map[string]string) string {
 	return params
 }
 
+func makeCopyOfVariables(variables map[string]string) map[string]string {
+	copy := map[string]string{}
+	for k, v := range variables {
+		copy[k] = v
+	}
+	return copy
+}
+
 func (c *Command) MustRun(now time.Time) bool {
 	if atomic.LoadInt32(&c.isRunningAtomic) != 0 {
 		return false
@@ -124,7 +132,12 @@ func (c *Command) timeOverdue(now time.Time) time.Duration {
 	}
 }
 
+// Launch the command in it's own goroutine.
 func (c *Command) Run(logger *log.Logger, variables map[string]string) {
+	// Because we're launching our own goroutine, we make a copy of 'variables', so
+	// that the caller doesn't need to remember to do that.
+	variables = makeCopyOfVariables(variables)
+
 	// It is important that we toggle isRunningAtomic = 1 from here.
 	// If we only toggled isRunningAtomic = 1 from inside the goroutine that we launch,
 	// then we'd be at risk of the function that called Run() trying to launch the same job twice.
