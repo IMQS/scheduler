@@ -3,11 +3,14 @@ package scheduler
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
-	"io/ioutil"
+	"github.com/IMQS/serviceconfigsgo"
 	"sort"
 	"strings"
 )
+
+const serviceConfigFileName = "scheduled-tasks.json"
+const serviceConfigVersion  = 1
+const serviceName           = "ImqsScheduler"
 
 // If you add or remove any members here, be sure to update HashSignature
 type ConfigCommand struct {
@@ -29,11 +32,11 @@ type Config struct {
 }
 
 func (c *Config) LoadFile(filename string) error {
-	bytes, err := ioutil.ReadFile(filename)
+	err := serviceconfig.GetConfig(filename, serviceName, serviceConfigVersion, serviceConfigFileName, c)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(bytes, c)
+	return nil
 }
 
 func (c *Config) SetCommandEnabled(cmd string, enabled bool) {

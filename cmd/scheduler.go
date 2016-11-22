@@ -24,7 +24,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/IMQS/cli"
 	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
@@ -165,6 +164,7 @@ func loadConfig(mainConfigPath, auxConfigPath string) {
 
 	if err := config.LoadFile(mainConfigPath); err != nil {
 		logger.Errorf("Error loading config file %v: %v", mainConfigPath, err)
+		return
 	}
 
 	if auxConfigPath != "" {
@@ -268,11 +268,6 @@ func runCommandNow(commandName string) {
 func execApp(name string, args []string, options cli.OptionSet) int {
 	switch name {
 	case "run":
-		if !options.Has("c") {
-			logger.Error("No config specified")
-			fmt.Printf("No config specified")
-			return 1
-		}
 		runWrapper := func() {
 			run(options)
 		}
