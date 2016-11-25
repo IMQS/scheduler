@@ -61,7 +61,7 @@ func getImqsHttpPort() int {
 		return imqsHttpPort
 	}
 	defaultPort := 80
-	cmd := exec.Command("c:\\imqsbin\\bin\\imqsrouter.exe", "-show-http-port", "-mainconfig", "c:\\imqsbin\\static-conf\\router-config.json", "-auxconfig", "c:\\imqsbin\\conf\\router-config.json")
+	cmd := exec.Command("c:\\imqsbin\\bin\\imqsrouter.exe", "-show-http-port")
 	outBuf := &bytes.Buffer{}
 	cmd.Stdout = outBuf
 	if err := cmd.Run(); err != nil {
