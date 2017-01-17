@@ -304,6 +304,12 @@ func run(options cli.OptionSet) {
 	tickChan := time.NewTicker(time.Second * 5).C
 	httpChan := make(chan string)
 
+	http.HandleFunc("/scheduler/ping", func(w http.ResponseWriter, r *http.Request) {
+		timestamp := time.Now().Unix()
+		logger.Infof("Pinging : %v", timestamp)
+		fmt.Fprintf(w, `{"Timestamp":%v}`, timestamp)
+	})
+
 	http.HandleFunc("/scheduler/", func(w http.ResponseWriter, r *http.Request) {
 		commandName := r.FormValue("command")
 		if len(commandName) == 0 {
