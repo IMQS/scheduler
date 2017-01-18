@@ -306,7 +306,6 @@ func run(options cli.OptionSet) {
 
 	http.HandleFunc("/scheduler/ping", func(w http.ResponseWriter, r *http.Request) {
 		timestamp := time.Now().Unix()
-		logger.Infof("Pinging : %v", timestamp)
 		fmt.Fprintf(w, `{"Timestamp":%v}`, timestamp)
 	})
 
