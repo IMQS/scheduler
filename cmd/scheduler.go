@@ -24,15 +24,16 @@ package main
 
 import (
 	"bytes"
-	"github.com/IMQS/cli"
-	"github.com/IMQS/log"
-	"github.com/IMQS/scheduler"
+	"fmt"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
-	"fmt"
+
+	"github.com/IMQS/cli"
+	"github.com/IMQS/log"
+	"github.com/IMQS/scheduler"
 )
 
 var commands []*scheduler.Command
@@ -125,13 +126,14 @@ func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *schedu
 	}
 
 	newCommand := &scheduler.Command{
-		Name:     cmd.Name,
-		Pool:     cmd.Pool,
-		Interval: interval,
-		Timeout:  timeout,
-		Exec:     cmd.Command,
-		Params:   cmd.Params,
-		Enabled:  isEnabled,
+		Name:        cmd.Name,
+		Pool:        cmd.Pool,
+		Interval:    interval,
+		Timeout:     timeout,
+		Exec:        cmd.Command,
+		Params:      cmd.Params,
+		Enabled:     isEnabled,
+		DisableLogs: cmd.DisableLogs,
 	}
 
 	// Only try parsing start time when interval value is valid and this is daily task

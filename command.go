@@ -2,12 +2,13 @@ package scheduler
 
 import (
 	"bytes"
-	"github.com/IMQS/log"
 	"os/exec"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/IMQS/log"
 )
 
 // Quite a few of Command's methods take a 'now' parameter. We do it like this
@@ -37,6 +38,7 @@ type Command struct {
 	Timeout         time.Duration
 	Exec            string
 	Params          []string
+	DisableLogs     bool // If true, then never emit stdout or stderr to our logs. This was created to silence output-heavy jobs such as tile cache seeding, because they flood our log aggregator (Datadog)
 	lastRun         time.Time
 	isRunningAtomic int32
 }
@@ -155,8 +157,10 @@ func (c *Command) Run(logger *log.Logger, variables map[string]string) {
 		err := cmd.Start()
 		if err != nil {
 			logger.Errorf("Failed to start %v: %v", c.Name, err)
-			logger.Infof("stdout: " + stdout.String())
-			logger.Infof("stderr: " + stderr.String())
+			if !c.DisableLogs {
+				logger.Infof("stdout: " + stdout.String())
+				logger.Infof("stderr: " + stderr.String())
+			}
 		} else {
 			// wait or timeout
 			donec := make(chan error, 1)
@@ -174,8 +178,10 @@ func (c *Command) Run(logger *log.Logger, variables map[string]string) {
 				//logger.Infof("Success %v", c.Name)
 				if !cmd.ProcessState.Success() {
 					logger.Errorf("Finished with error: %v", c.Name)
-					logger.Infof("stdout: " + stdout.String())
-					logger.Infof("stderr: " + stderr.String())
+					if !c.DisableLogs {
+						logger.Infof("stdout: " + stdout.String())
+						logger.Infof("stderr: " + stderr.String())
+					}
 				}
 			}
 		}

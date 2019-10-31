@@ -3,24 +3,27 @@ package scheduler
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"github.com/IMQS/serviceconfigsgo"
+	"fmt"
 	"sort"
 	"strings"
+
+	serviceconfig "github.com/IMQS/serviceconfigsgo"
 )
 
 const serviceConfigFileName = "scheduled-tasks.json"
-const serviceConfigVersion  = 1
-const serviceName           = "ImqsScheduler"
+const serviceConfigVersion = 1
+const serviceName = "ImqsScheduler"
 
 // If you add or remove any members here, be sure to update HashSignature
 type ConfigCommand struct {
-	Name      string
-	Pool      string
-	Interval  string
-	Timeout   string
-	Command   string
-	Params    []string
-	StartTime string
+	Name        string
+	Pool        string
+	Interval    string
+	Timeout     string
+	Command     string
+	Params      []string
+	StartTime   string
+	DisableLogs bool // If true, then never emit stdout or stderr to our logs. This was created to silence output-heavy jobs such as tile cache seeding, because they flood our log aggregator (Datadog)
 }
 
 // If you add or remove any members here, be sure to update HashSignature
@@ -78,7 +81,7 @@ func (c *Config) SetCommandEnabled(cmd string, enabled bool) {
 }
 
 func (c *ConfigCommand) HashSignature() string {
-	return c.Name + "." + c.Pool + "." + c.Interval + "." + c.Timeout + "." + c.Command + "." + strings.Join(c.Params, ",") + "." + c.StartTime
+	return c.Name + "." + c.Pool + "." + c.Interval + "." + c.Timeout + "." + c.Command + "." + strings.Join(c.Params, ",") + "." + c.StartTime + fmt.Sprintf("%v", c.DisableLogs)
 }
 
 // Returns a hex encoded SHA1 hash of all the contents of the configuration. This is used to
