@@ -1,4 +1,5 @@
-/* A task scheduler (like cron) for Windows.
+/*
+	A task scheduler (like cron) for Windows.
 
 It may seem ridiculous to build a task scheduler. Why not just use cron on linux, and scheduled tasks on Windows?
 Cron is fine, but the Windows task scheduler has proven unreliable.
@@ -32,6 +33,7 @@ import (
 	"time"
 
 	"github.com/IMQS/cli"
+	"github.com/IMQS/gowinsvc/service"
 	"github.com/IMQS/log"
 	"github.com/IMQS/scheduler"
 )
@@ -47,7 +49,7 @@ const (
 )
 
 func main() {
-	logger = log.New("c:/imqsvar/logs/scheduler.log")
+	logger = log.New("c:/imqsvar/logs/scheduler.log", false)
 
 	app := cli.App{}
 	app.Description = "ImqsScheduler -c=config [options] command"
@@ -274,7 +276,7 @@ func execApp(name string, args []string, options cli.OptionSet) int {
 		runWrapper := func() {
 			run(options)
 		}
-		if !scheduler.RunAsService(runWrapper) {
+		if !service.RunAsService(runWrapper) {
 			runWrapper()
 		}
 
