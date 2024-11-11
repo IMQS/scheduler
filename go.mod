@@ -1,12 +1,12 @@
 module github.com/IMQS/scheduler
 
-go 1.22.7
+go 1.22
 
 require (
-	github.com/IMQS/cli v0.0.0-20240927080723-77971ab1416d
-	github.com/IMQS/gowinsvc v0.0.0-20240927080910-c5dd795a3567
-	github.com/IMQS/log v1.0.4-0.20240927081642-e27b2cf116fa
-	github.com/IMQS/serviceconfigsgo v1.1.1-0.20241002060418-1d985396d903
+	github.com/IMQS/cli v1.1.0
+	github.com/IMQS/gowinsvc v1.1.0
+	github.com/IMQS/log v1.2.0
+	github.com/IMQS/serviceconfigsgo v1.3.0
 )
 
 require (
