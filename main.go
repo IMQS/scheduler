@@ -35,12 +35,12 @@ import (
 	"github.com/IMQS/cli"
 	"github.com/IMQS/gowinsvc/service"
 	"github.com/IMQS/log"
-	"github.com/IMQS/scheduler"
+	"github.com/IMQS/scheduler/utils"
 )
 
-var commands []*scheduler.Command
+var commands []*utils.Command
 var logger *log.Logger
-var config scheduler.Config
+var config utils.Config
 var imqsHttpPort int
 
 const (
@@ -92,7 +92,7 @@ func setDefaultVariables() {
 	}
 }
 
-func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *scheduler.Command {
+func buildCommandFromConfig(cmd utils.ConfigCommand, isEnabled bool) *utils.Command {
 	// Convert time from string into time.Duration format
 	haveInterval := true
 	interval, err := time.ParseDuration(cmd.Interval)
@@ -127,7 +127,7 @@ func buildCommandFromConfig(cmd scheduler.ConfigCommand, isEnabled bool) *schedu
 		logger.Errorf("Invalid empty command for task '%v'", cmd.Name)
 	}
 
-	newCommand := &scheduler.Command{
+	newCommand := &utils.Command{
 		Name:        cmd.Name,
 		Pool:        cmd.Pool,
 		Interval:    interval,
@@ -164,7 +164,7 @@ func toggleEnabled(enabledMap map[string]bool, enabled, disabled []string) {
 }
 
 func loadConfig(mainConfigPath, auxConfigPath string) {
-	config = scheduler.Config{}
+	config = utils.Config{}
 	setDefaultVariables()
 
 	if err := config.LoadFile(mainConfigPath); err != nil {
@@ -174,7 +174,7 @@ func loadConfig(mainConfigPath, auxConfigPath string) {
 
 	if auxConfigPath != "" {
 		// Overlay the aux config over the static config
-		var overlayConfig scheduler.Config
+		var overlayConfig utils.Config
 		if err := overlayConfig.LoadFile(auxConfigPath); err != nil {
 			logger.Errorf("Error loading aux config file %v: %v", auxConfigPath, err)
 		} else {
@@ -257,7 +257,7 @@ func cmdEnabledList() string {
 // This method handles the http request used to start a job.
 func runCommandNow(commandName string) {
 	// Look for the Importer command in the list of commands
-	var command *scheduler.Command
+	var command *utils.Command
 	for _, cmd := range commands {
 		if cmd.Name == commandName {
 			command = cmd
@@ -328,7 +328,7 @@ func run(options cli.OptionSet) {
 			}
 		case <-tickChan:
 			{
-				next := scheduler.NextRunnable(commands, time.Now())
+				next := utils.NextRunnable(commands, time.Now())
 				if next != nil {
 					next.Run(logger, config.Variables)
 				}

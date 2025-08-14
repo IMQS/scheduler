@@ -1,6 +1,6 @@
 //go:build windows
 
-package scheduler
+package utils
 
 import (
 	"os/exec"

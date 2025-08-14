@@ -1,4 +1,4 @@
-package scheduler
+package utils
 
 import (
 	"bytes"
@@ -26,7 +26,9 @@ import (
 // so it's very unlikely that we miss our 2 hour window.
 const dailyCommandWindow = 2 * time.Hour
 
-/* A scheduled task
+/*
+	A scheduled task
+
 Every scheduled task belongs to a pool. At most one job from a pool may run at any one time.
 */
 type Command struct {
