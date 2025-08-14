@@ -35,7 +35,7 @@ import (
 	"github.com/IMQS/cli"
 	"github.com/IMQS/gowinsvc/service"
 	"github.com/IMQS/log"
-	"github.com/IMQS/scheduler"
+	"github.com/IMQS/scheduler/scheduler"
 )
 
 var commands []*scheduler.Command
