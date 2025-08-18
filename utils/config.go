@@ -1,4 +1,4 @@
-package scheduler
+package utils
 
 import (
 	"crypto/sha1"
